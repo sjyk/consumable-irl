@@ -132,7 +132,7 @@ class TransitionStateClustering:
 	def taskToTrajectory(self):
 		N = len(self._demonstration_sizes)
 		for i in range(0,N):
-			tSD = [(k[2],k[3],k[1]) for k in self.task_segmentation]
+			tSD = [(k[2],k[3],k[1]) for k in self.task_segmentation if k[0] == i]
 			
 			timeDict = {}
 			for t in tSD:
@@ -172,7 +172,6 @@ class TransitionStateClustering:
 			if self.verbose:
 				print "[TSC] Normalizing With Kernel Transformation"
 
-		print np.shape(demo_data_array)
 		"""
 		Apply DP-GMM to find transitions
 		"""
@@ -236,7 +235,7 @@ class TransitionStateClustering:
 			real_clusters = i + 1
 			if running_total/total > 0.90:
 				break
-				
+
 		return [np.argmax(l[0:real_clusters]) for l in likelihoods]
 
 	"""
