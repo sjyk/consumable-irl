@@ -8,7 +8,7 @@ from rlpy.Domains.Domain import Domain
 import numpy as np
 from rlpy.Tools import plt, FONTSIZE, linearMap
 
-class ConsumableGridWorld(Domain): 
+class ConsumableGridWorldIRL(Domain): 
     #__metaclass__ = Domain
     #default paths
     currentdir = os.path.dirname(os.path.abspath(inspect.getfile(inspect.currentframe())))
@@ -42,8 +42,13 @@ class ConsumableGridWorld(Domain):
     #: Up, Down, Left, Right
     ACTIONS = np.array([[-1, 0], [+1, 0], [0, -1], [0, +1]])
 
-    def __init__(self, goalArray, 
+
+    #an encoding function maps a set of previous states to a fixed
+    #width encoding
+    def __init__(self, 
+                 goalArray, 
     			 mapname=os.path.join(default_map_dir, "4x5.txt"),
+                 encodingFunction=None,
                  noise=.1, 
                  episodeCap=None):
        
@@ -51,13 +56,22 @@ class ConsumableGridWorld(Domain):
         self.map = np.loadtxt(mapname, dtype=np.uint8)
         self.goalArray0 = np.array(goalArray)
         self.goalArray = np.array(goalArray)
-        #
+        self.prev_states = []
+
+        if encodingFunction == None:
+            self.encodingFunction = ConsumableGridWorldIRL.allMarkovEncoding
+        else:
+            self.encodingFunction = encodingFunction
+
         #print self.goalArray
         #self.goalIndex = 0
 
         if self.map.ndim == 1:
             self.map = self.map[np.newaxis, :]
-        self.start_state = np.argwhere(self.map == self.START)[0]
+
+        self.start_state = np.concatenate((np.argwhere(self.map == self.START)[0], 
+                                             self.encodingFunction(self.prev_states)))
+
         self.ROWS, self.COLS = np.shape(self.map)
 
         #remove goals for existing maps
@@ -69,14 +83,23 @@ class ConsumableGridWorld(Domain):
         for g in goalArray:
         	self.map[g[0],g[1]] = self.GOAL
 
-        self.statespace_limits = np.array(
-            [[0, self.ROWS - 1], [0, self.COLS - 1]])
+        encodingLimits = []
+        for i in range(0,len(self.encodingFunction(self.prev_states))):
+            encodingLimits.append([0,1])
+
+        sslimits = [[0, self.ROWS - 1], [0, self.COLS - 1]]
+        sslimits.extend(encodingLimits)
+        #print np.array(sslimits)[:,0]
+
+        self.statespace_limits = np.array(sslimits)
+
+        self.continuous_dims = []
         self.NOISE = noise
-        self.DimNames = ['Row', 'Col']
+        self.DimNames = ["Dim: "+str(k) for k in range(0,2+len(self.encodingFunction(self.prev_states)))]
         # 2*self.ROWS*self.COLS, small values can cause problem for some
         # planning techniques
         self.episodeCap = 1000
-        super(ConsumableGridWorld, self).__init__()
+        super(ConsumableGridWorldIRL, self).__init__()
 
     def showDomain(self, a=0, s=None):
         if s is None:
@@ -91,6 +114,9 @@ class ConsumableGridWorld(Domain):
                 interpolation='nearest',
                 vmin=0,
                 vmax=5)
+
+            
+
             plt.xticks(np.arange(self.COLS), fontsize=FONTSIZE)
             plt.yticks(np.arange(self.ROWS), fontsize=FONTSIZE)
             # pl.tight_layout()
@@ -231,7 +257,7 @@ class ConsumableGridWorld(Domain):
                 if self.map[r, c] == self.PIT:
                     V[r, c] = self.MIN_RETURN
                 if self.map[r, c] == self.EMPTY or self.map[r, c] == self.START:
-                    s = np.array([r, c])
+                    s = np.concatenate((np.array([r, c]),np.zeros(len(self.encodingFunction([])))))
                     As = self.possibleActions(s)
                     terminal = self.isTerminal(s)
                     Qs = representation.Qs(s, terminal)
@@ -287,13 +313,21 @@ class ConsumableGridWorld(Domain):
         ns = self.state.copy()
         ga = self.goalArray.copy()
 
+        self.prev_states.append(ns[0:2])
+
         if self.random_state.random_sample() < self.NOISE:
             # Random Move
             a = self.random_state.choice(self.possibleActions())
 
         # Take action
-        ns = self.state + self.ACTIONS[a]
+        statesize = np.shape(self.state)
+        actionsize = np.shape(self.ACTIONS[a])
+       # print statesize[0]-actionsize[0]
 
+
+        ns = np.concatenate((self.state[0:2] + self.ACTIONS[a],
+                             self.encodingFunction(self.prev_states)))
+        #print ns[0], ns[1],ga[0][0],ga[0][1]
         # Check bounds on state values
         if (ns[0] < 0 or ns[0] == self.ROWS or
                 ns[1] < 0 or ns[1] == self.COLS or
@@ -304,51 +338,15 @@ class ConsumableGridWorld(Domain):
             self.state = ns.copy()
 
         terminal = self.isTerminal()
-
+        #print ns[0], ns[1],ga[0][0],ga[0][1]
         # Compute the reward and enforce ordering
         if terminal:
             pass
         elif ga[0][0] == ns[0] and  ga[0][1] == ns[1]:
             r = self.GOAL_REWARD
-           # print ga[0][0]
             ga = ga[1:]
             self.goalArray = ga
-
-        if self.map[ns[0], ns[1]] == self.PIT:
-            r = self.PIT_REWARD
-
-        return r, ns, terminal, self.possibleActions()
-
-    def simustep(self, ns, a):
-        r = self.STEP_REWARD
-        ga = self.goalArray.copy()
-
-        if self.random_state.random_sample() < self.NOISE:
-            # Random Move
-            a = self.random_state.choice(self.possibleActions())
-
-        # Take action
-        ns = self.state + self.ACTIONS[a]
-
-        # Check bounds on state values
-        if (ns[0] < 0 or ns[0] == self.ROWS or
-                ns[1] < 0 or ns[1] == self.COLS or
-                self.map[ns[0], ns[1]] == self.BLOCKED):
-            ns = self.state.copy()
-        else:
-            # If in bounds, update the current state
-            self.state = ns.copy()
-
-        terminal = self.isTerminal()
-
-        # Compute the reward and enforce ordering
-        if terminal:
-            pass
-        elif ga[0][0] == ns[0] and  ga[0][1] == ns[1]:
-            r = self.GOAL_REWARD
-           # print ga[0][0]
-            ga = ga[1:]
-            self.goalArray = ga
+            #print "Goal!", ns
 
         if self.map[ns[0], ns[1]] == self.PIT:
             r = self.PIT_REWARD
@@ -356,8 +354,13 @@ class ConsumableGridWorld(Domain):
         return r, ns, terminal, self.possibleActions()
 
     def s0(self):
+        self.prev_states = []
+
+        #print "Test"
+
         self.state = self.start_state.copy()
         self.goalArray = self.goalArray0
+        
         return self.state, self.isTerminal(), self.possibleActions()
 
     def isTerminal(self, s=None):
@@ -374,7 +377,8 @@ class ConsumableGridWorld(Domain):
             s = self.state
         possibleA = np.array([], np.uint8)
         for a in xrange(self.actions_num):
-            ns = s + self.ACTIONS[a]
+            ns = s[0:2] + self.ACTIONS[a]
+            #print s[0:1],ns[0], ns[1]
             if (
                     ns[0] < 0 or ns[0] == self.ROWS or
                     ns[1] < 0 or ns[1] == self.COLS or
@@ -425,3 +429,39 @@ class ConsumableGridWorld(Domain):
                     :,
                     0]
             )
+
+    @staticmethod
+    def allMarkovEncoding(ps):
+        return [0]
+
+    @staticmethod
+    def stateVisitEncoding(ps, waypoints):
+        result = []
+        for w in waypoints:
+            k = -1
+            pl = [tuple(p) for p in ps]
+            try:
+                k = pl.index(w)
+            except ValueError:
+                pass
+            result.append(k)
+
+        result_hash = []
+
+        if len(waypoints) == 1 and result[0] == -1:
+            return [0]
+        elif len(waypoints) == 1 and result[0] != -1:
+            return [1]
+        
+        if result[0] != -1:
+            result_hash.append(1)
+        else:
+            result_hash.append(0)
+
+        for i in range(1,len(waypoints)):
+            if result[i] != -1 and result[i] > result[i-1]:
+                result_hash.append(1)
+            else:
+                result_hash.append(0)
+        #print len(waypoints), result_hash
+        return result_hash
