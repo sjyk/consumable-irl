@@ -32,14 +32,14 @@ def make_experiment(exp_id=1, path="./Results/Tutorial/gridworld-qlearning"):
 
     # Domain:
     maze = os.path.join(ConsumableGridWorld.default_map_dir, '11x11-Rooms.txt')
-    domain = ConsumableGridWorldIRL([(3,8), (1,3)],mapname=maze, encodingFunction= lambda x: ConsumableGridWorldIRL.stateVisitEncoding(x,[(3,8)]), noise=0.1)
+    domain = ConsumableGridWorldIRL([(3,8), (1,3)],mapname=maze, encodingFunction= lambda x: ConsumableGridWorldIRL.allMarkovEncoding(x), noise=0.3)
     opt["domain"] = domain
 
     # Representation
-    representation = Tabular(domain, discretization=100)
+    representation = Tabular(domain, discretization=400)
 
     # Policy
-    policy = eGreedy(representation, epsilon=0.2)
+    policy = eGreedy(representation, epsilon=0.3)
 
     # Agent
     opt["agent"] = Q_Learning(representation=representation, policy=policy,
@@ -47,9 +47,9 @@ def make_experiment(exp_id=1, path="./Results/Tutorial/gridworld-qlearning"):
                        initial_learn_rate=0.1,
                        learn_rate_decay_mode="boyan", boyan_N0=100,
                        lambda_=0.)
-    opt["checks_per_policy"] = 100
-    opt["max_steps"] = 40
-    opt["num_policy_checks"] = 10
+    opt["checks_per_policy"] = 10
+    opt["max_steps"] = 10000
+    opt["num_policy_checks"] = 20
     experiment = Experiment(**opt)
     return experiment
 
@@ -57,6 +57,6 @@ if __name__ == '__main__':
     experiment = make_experiment(1)
     experiment.run(visualize_steps=False,  # should each learning step be shown?
                    visualize_learning=False,  # show policy / value function?
-                   visualize_performance=1)  # show performance runs?
+                   visualize_performance=0)  # show performance runs?
     experiment.plot()
     experiment.save()

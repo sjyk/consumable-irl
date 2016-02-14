@@ -35,6 +35,7 @@ class ConsumableGridWorldIRL(Domain):
     MIN_RETURN = -1
     # Used for graphical shifting of arrows
     SHIFT = .1
+    #MAX_STEPS = min(100,rows*cols)
 
     actions_num = 4
     # Constants in the map
@@ -104,7 +105,7 @@ class ConsumableGridWorldIRL(Domain):
         self.DimNames = ["Dim: "+str(k) for k in range(0,2+len(self.encodingFunction(self.prev_states)))]
         # 2*self.ROWS*self.COLS, small values can cause problem for some
         # planning techniques
-        self.episodeCap = 1000
+        self.episodeCap = 2*self.ROWS*self.COLS
         super(ConsumableGridWorldIRL, self).__init__()
 
     def showDomain(self, a=0, s=None):
@@ -383,6 +384,9 @@ class ConsumableGridWorldIRL(Domain):
             return True
         if self.map[s[0], s[1]] == self.PIT:
             return True
+        #if len(self.prev_states) > self.MAX_STEPS:
+        #    return True
+
         return False
 
     def possibleActions(self, s=None):
