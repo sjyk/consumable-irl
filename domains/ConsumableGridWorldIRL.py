@@ -45,10 +45,17 @@ class ConsumableGridWorldIRL(Domain):
 
     #an encoding function maps a set of previous states to a fixed
     #width encoding
+    """
+    A reward function is a function over ALL of the previous states, 
+    the set of goal states,
+    the step reward constant, 
+    and the goal reward constant.
+    """
     def __init__(self, 
                  goalArray, 
     			 mapname=os.path.join(default_map_dir, "4x5.txt"),
                  encodingFunction=None,
+                 rewardFunction=None,
                  noise=.1, 
                  episodeCap=None):
        
@@ -63,8 +70,7 @@ class ConsumableGridWorldIRL(Domain):
         else:
             self.encodingFunction = encodingFunction
 
-        #print self.goalArray
-        #self.goalIndex = 0
+        self.rewardFunction = rewardFunction
 
         if self.map.ndim == 1:
             self.map = self.map[np.newaxis, :]
@@ -115,7 +121,8 @@ class ConsumableGridWorldIRL(Domain):
                 vmin=0,
                 vmax=5)
 
-            
+            for i in range(0, len(self.goalArray0)):
+                plt.text(self.goalArray0[i][1],self.goalArray0[i][0],str(i))
 
             plt.xticks(np.arange(self.COLS), fontsize=FONTSIZE)
             plt.yticks(np.arange(self.ROWS), fontsize=FONTSIZE)
@@ -351,6 +358,12 @@ class ConsumableGridWorldIRL(Domain):
         if self.map[ns[0], ns[1]] == self.PIT:
             r = self.PIT_REWARD
 
+        if self.rewardFunction != None:
+            r = self.rewardFunction(self.prev_states, 
+                                    self.goalArray, 
+                                    self.STEP_REWARD, 
+                                    self.GOAL_REWARD)
+
         return r, ns, terminal, self.possibleActions()
 
     def s0(self):
@@ -465,3 +478,16 @@ class ConsumableGridWorldIRL(Domain):
                 result_hash.append(0)
         #print len(waypoints), result_hash
         return result_hash
+
+    """
+    Popular reward functions that you could use
+    """
+    @staticmethod
+    def allMarkovReward(ps,ga, sr, gr):
+        r = sr
+        last_state = ps[len(ps)-1][0]
+        if (last_state[0],last_state[1]) in ga:
+            r = gr
+        return r
+
+    implicitReward = None

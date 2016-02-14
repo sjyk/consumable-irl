@@ -32,7 +32,7 @@ def make_experiment(exp_id=1, path="./Results/Tutorial/gridworld-qlearning"):
 
     # Domain:
     maze = os.path.join(ConsumableGridWorld.default_map_dir, '11x11-Rooms.txt')
-    domain = ConsumableGridWorldIRL([(1,3), (3,8), (2,3)],mapname=maze, encodingFunction= lambda x: ConsumableGridWorldIRL.stateVisitEncoding(x,[(1,3), (3,8)]), noise=0.1)
+    domain = ConsumableGridWorldIRL([(3,8), (1,3)],mapname=maze, encodingFunction= lambda x: ConsumableGridWorldIRL.stateVisitEncoding(x,[(3,8)]), noise=0.1)
     opt["domain"] = domain
 
     # Representation

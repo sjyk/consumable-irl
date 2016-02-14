@@ -270,3 +270,7 @@ Total Experiment Duration 0:00:01
     12: >>> E[0:00:00]-R[0:00:00]: Return=     1.842, Steps=690.08, Features = 484
     16: >>> E[0:00:00]-R[0:00:00]: Return=     1.912, Steps=660.64, Features = 484
      0: >>> E[0:00:00]-R[?]: Return=     1.886, Steps=696.58, Features = 484
+     0: >>> E[0:00:00]-R[?]: Return=    0.9577, Steps=633.84, Features = 242
+     0: >>> E[0:00:00]-R[?]: Return=    0.9577, Steps=633.84, Features = 242
+     0: >>> E[0:00:00]-R[?]: Return=    0.9577, Steps=633.84, Features = 242
+     4: >>> E[0:00:00]-R[0:00:00]: Return=     1.111, Steps=620.78, Features = 242
