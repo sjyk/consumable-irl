@@ -19,7 +19,7 @@ class GoalPathPlanner:
 	This class takes a domain as a parameter
 	and learns a model to completion.
 	"""
-	def __init__(self, domain, representation, policy,steps=10000):
+	def __init__(self, domain, representation, policy,steps=100000):
 		
 		opt = {}
 		opt["domain"] = domain
@@ -59,8 +59,6 @@ class GoalPathPlanner:
 				
 			demonstrations.append(traj)
 		return demonstrations
-
-
 
 
 

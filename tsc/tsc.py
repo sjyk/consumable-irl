@@ -116,7 +116,7 @@ class TransitionStateClustering:
 		for c in distinct_clusters:
 			tD = set([d[0] for d in self._transition_states_scluster if d[2] == c])
 			tS = [d for d in self._transition_states_scluster if d[2] == c]
-			if len(tD)/N > pruning:
+			if (len(tD) +0.0)/N > pruning:
 				new_transitions.extend(tS)
 
 		if self.verbose:
@@ -195,7 +195,7 @@ class TransitionStateClustering:
 				elif j == (n-1):
 					pass#self._transitions.append((i,n-1))
 				elif indices[inc-1] != indices[inc]:
-					self._transitions.append((i,j))
+					self._transitions.append((i,j-self.window_size))
 
 				inc = inc + 1
 
@@ -279,6 +279,8 @@ class TransitionStateClustering:
 	def clusterInTime(self):
 		p = self._demonstration_sizes[0][1]
 
+		unorderedmodel = []
+
 		for i in range(0,self._distinct_state_clusters):
 			tsI = [s for s in self._transition_states_scluster if s[2]==i]
 			ts_data_array = np.zeros((len(tsI),p))
@@ -308,7 +310,10 @@ class TransitionStateClustering:
 										       indicesDict.index(indices[j])))
 
 			#GMM model
-			self.model.append(mm)
+			unorderedmodel.append((np.median(t_data_array),mm))
+
+		unorderedmodel.sort()
+		self.model = [u[1] for u in unorderedmodel]
 
 		if self.verbose:
 			print "[TSC] Learned The Following Model: ", self.model

@@ -58,7 +58,8 @@ class ConsumableGridWorldIRL(Domain):
                  encodingFunction=None,
                  rewardFunction=None,
                  noise=.1, 
-                 episodeCap=None):
+                 episodeCap=None,
+                 binary=False):
        
         #setup consumable rewards
         self.map = np.loadtxt(mapname, dtype=np.uint8)
@@ -92,7 +93,10 @@ class ConsumableGridWorldIRL(Domain):
 
         encodingLimits = []
         for i in range(0,len(self.encodingFunction(self.prev_states))):
-            encodingLimits.append([0,1])
+            if binary:
+                encodingLimits.append([0,1])
+            else:
+                encodingLimits.append([0,max(self.ROWS,self.COLS)-1])
 
         sslimits = [[0, self.ROWS - 1], [0, self.COLS - 1]]
         sslimits.extend(encodingLimits)
@@ -100,7 +104,7 @@ class ConsumableGridWorldIRL(Domain):
 
         self.statespace_limits = np.array(sslimits)
 
-        self.continuous_dims = []
+        self.continuous_dims = []#range(2,2+len(self.encodingFunction(self.prev_states)))
         self.NOISE = noise
         self.DimNames = ["Dim: "+str(k) for k in range(0,2+len(self.encodingFunction(self.prev_states)))]
         # 2*self.ROWS*self.COLS, small values can cause problem for some
@@ -483,6 +487,30 @@ class ConsumableGridWorldIRL(Domain):
         #print len(waypoints), result_hash
         return result_hash
 
+    @staticmethod
+    def statePassageEncoding(ps, waypoints, cap=5):
+        result = []
+        for w in waypoints:
+            k = -1
+            pl = [tuple(p) for p in ps]
+            result.append(min(pl.count(w), cap))
+
+        return result
+
+    
+    @staticmethod
+    def slidingWindowEncoding(ps, k=1):
+        result = []
+        for i in range(0, k):
+            try:
+                result.append(tuple(ps[-i])[0])
+                result.append(tuple(ps[-i])[1])
+            except IndexError:
+                result.append(0)
+                result.append(0)
+
+        return result   
+
     """
     Popular reward functions that you could use
     """
@@ -495,3 +523,31 @@ class ConsumableGridWorldIRL(Domain):
         return r
 
     implicitReward = None
+
+    """
+    Popular reward functions that you could use
+    """
+    @staticmethod
+    def maxEntReward(ps, ga, sr, gr, dist):
+        last_state = ps[len(ps)-1]
+        return dist[last_state[0],last_state[1]]
+
+    """
+    Popular reward functions that you could use
+    """
+    @staticmethod
+    def rewardIRL(ps, ga, sr, gr, dist):
+        last_state = ps[len(ps)-1]
+        atgoal = 0
+        if len(ga) > 0 and (last_state[0],last_state[1]) in ga[0:1]:
+            atgoal = 1
+        return (dist[last_state[0],last_state[1]] + atgoal)*gr
+
+    """
+    Popular reward functions that you could use
+    """
+    @staticmethod
+    def tRewardIRL(ps, ga, sr, gr, dist, waypoints):
+        last_state = ps[len(ps)-1]
+        atgoal = np.sum(ConsumableGridWorldIRL.stateVisitEncoding(ps,waypoints))
+        return (dist[last_state[0],last_state[1]] + atgoal)*gr
