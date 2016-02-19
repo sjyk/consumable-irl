@@ -350,7 +350,7 @@ class ConsumableGridWorldIRL(Domain):
             self.state = ns.copy()
 
         terminal = self.isTerminal()
-        #print ns[0], ns[1],ga[0][0],ga[0][1]
+        #print ns[0], ns[1],ga
         # Compute the reward and enforce ordering
         if terminal:
             pass
@@ -358,16 +358,17 @@ class ConsumableGridWorldIRL(Domain):
             r = self.GOAL_REWARD
             ga = ga[1:]
             self.goalArray = ga
-            #print "Goal!", ns
+            print "Goal!", ns
 
         if self.map[ns[0], ns[1]] == self.PIT:
             r = self.PIT_REWARD
 
         if self.rewardFunction != None:
-            r = self.rewardFunction(self.prev_states, 
+            r = r + self.rewardFunction(self.prev_states, 
                                     self.goalArray, 
                                     self.STEP_REWARD, 
                                     self.GOAL_REWARD)
+            #print r
 
         return r, ns, terminal, self.possibleActions()
 
@@ -452,8 +453,8 @@ class ConsumableGridWorldIRL(Domain):
             )
 
     @staticmethod
-    def allMarkovEncoding(ps):
-        return [0]
+    def allMarkovEncoding(ps,k=1):
+        return [0]*k
 
     @staticmethod
     def stateVisitEncoding(ps, waypoints):
@@ -480,10 +481,11 @@ class ConsumableGridWorldIRL(Domain):
             result_hash.append(0)
 
         for i in range(1,len(waypoints)):
-            if result[i] != -1 and result[i] > result[i-1]:
+            if result[i] != -1 and result_hash[i-1] != 0:
                 result_hash.append(1)
             else:
                 result_hash.append(0)
+        #print result, result_hash
         #print len(waypoints), result_hash
         return result_hash
 
@@ -530,18 +532,21 @@ class ConsumableGridWorldIRL(Domain):
     @staticmethod
     def maxEntReward(ps, ga, sr, gr, dist):
         last_state = ps[len(ps)-1]
+        #print last_state, dist[last_state[0],last_state[1]]
         return dist[last_state[0],last_state[1]]
 
     """
     Popular reward functions that you could use
     """
     @staticmethod
-    def rewardIRL(ps, ga, sr, gr, dist):
+    def rewardIRL(ps, ga, sr, gr, dist, original, reg=0.01):
         last_state = ps[len(ps)-1]
-        atgoal = 0
-        if len(ga) > 0 and (last_state[0],last_state[1]) in ga[0:1]:
-            atgoal = 1
-        return (dist[last_state[0],last_state[1]] + atgoal)*gr
+
+        if len(ga) == 0:
+            return 0
+
+        remaining = len(original)-len(ga)
+        return reg*dist[remaining][last_state[0],last_state[1]]
 
     """
     Popular reward functions that you could use

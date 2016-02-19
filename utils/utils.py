@@ -32,7 +32,46 @@ def calculateStateDist(dims, trajs):
 	counts = np.zeros((dims[0],dims[1]))
 	for t in trajs:
 		t1 = [tuple(a.tolist()) for a in t]
-		for k in list(set(t1)):
+		for k in t1:
 			counts[k[0],k[1]] = counts[k[0],k[1]] + 1
     
 	return counts/np.sum(np.sum(counts))
+
+def calculateStateTemporalDist(dims, trajs, waypoints):
+	
+	distArray = []
+
+	for i in range(0, len(waypoints)):
+		counts = np.zeros((dims[0],dims[1]))
+		for t in trajs:
+			segmentp = segmentTrajectory(t, waypoints)
+
+			if segmentp != None:
+				segment = segmentp[0]
+				for k in segment:
+					counts[k[0],k[1]] = counts[k[0],k[1]] + 1
+    
+		distArray.append(counts/np.sum(np.sum(counts)))
+	return distArray
+
+def segmentTrajectory(traj, waypoints):
+	result = []
+	
+	tuptraj = [tuple(a.tolist()) for a in traj]
+	running = []
+	wpindex = 0
+	for k in tuptraj:
+		#print k, waypoints[wpindex]
+		if k[0:2] == waypoints[wpindex]:
+			running.append(k)
+			result.append(running)
+			running = []
+			wpindex = wpindex + 1
+		else:
+			running.append(k)
+
+	if wpindex != len(waypoints):
+		return None
+	else:
+		return result
+
