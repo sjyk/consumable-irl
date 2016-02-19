@@ -22,6 +22,9 @@ from sklearn import mixture, decomposition
 from dpcluster import *
 import matplotlib.pyplot as plt
 
+#debug
+# import IPython
+
 class TransitionStateClustering:
 
 	"""
@@ -223,8 +226,8 @@ class TransitionStateClustering:
 	"""
 	def DPGMM(self,data, dimensionality):
 		vdp = VDP(GaussianNIW(dimensionality))
-		vdp.batch_learn(vdp.distr.sufficient_stats(data))
-		likelihoods = vdp.pseudo_resp(data)[0]
+		vdp.batch_learn(vdp.distr.sufficient_stats(data))		
+		likelihoods = vdp.pseudo_resp(np.ascontiguousarray(data))[0]
 
 		real_clusters = 1
 		cluster_s = vdp.cluster_sizes()
