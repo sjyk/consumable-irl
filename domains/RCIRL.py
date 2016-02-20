@@ -5,7 +5,7 @@ consumable rewards
 import os,sys,inspect
 from rlpy.Tools import __rlpy_location__, findElemArray1D, perms
 from rlpy.Domains.Domain import Domain
-from DomainMethods import allMarkovEncoding
+from ConsumableGridWorldIRL import ConsumableGridWorldIRL
 from rlpy.Tools import plt, bound, wrap, mpatches, id2vec
 import matplotlib as mpl
 from copy import deepcopy
@@ -13,6 +13,8 @@ import numpy as np
 import pickle
 from rlpy.Tools import plt, FONTSIZE, linearMap  
 import math
+
+allMarkovEncoding = ConsumableGridWorldIRL.allMarkovEncoding
 
 class RCIRL(Domain): 
     # #default paths
@@ -59,6 +61,7 @@ class RCIRL(Domain):
     HEADING_discretization = 3
     ARROW_LENGTH = .2
     car_fig = None
+    wallArray = None
 
 
     # #an encoding function maps a set of previous states to a fixed
@@ -317,6 +320,18 @@ class RCIRL(Domain):
         car_ymin = y - self.CAR_WIDTH / 2.
         if self.domain_fig is None:  # Need to initialize the figure
             self.domain_fig = plt.figure()
+
+            for xmin, ymin, dx, dy in self.wallArray:
+                plt.gca().add_patch(
+                    mpatches.Rectangle(
+                        [xmin,
+                         ymin],
+                        dx,
+                        dy,
+                        color='b',
+                        alpha=.4)
+                )
+
             # Goal
             for goal in self.goalArray:
                 plt.gca(
