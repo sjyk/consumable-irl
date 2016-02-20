@@ -71,6 +71,7 @@ class RCIRL(Domain):
     # """
     def __init__(self, 
                  goalArray, 
+                 wallArray=None,
                  encodingFunction=allMarkovEncoding, # TODO
                  rewardFunction=None,
                  goalfn=lambda state, goal: state == goal,
@@ -107,8 +108,10 @@ class RCIRL(Domain):
         else:
             self.NOISE = 0
 
-        if step_reward:
-            self.STEP_REWARD = step_reward
+        if wallArray is not None:
+            for elem in wallArray: # (left corner) x, y, dx, dy
+                assert len(elem) == 4
+            self.wallArray = np.array(wallArray)
         if episodeCap:
             self.episodeCap = episodeCap
         if goal_radius:
@@ -161,6 +164,9 @@ class RCIRL(Domain):
 
         terminal = self.isTerminal() # TODO: Check - get terminal after?
 
+        if self.bumped(self.state):
+            pass
+
         if self.collided(self.state):
             # r = (self.episodeCap - len(self.prev_states)) * self.STEP_REWARD
             r = -self.episodeCap*(-self.STEP_REWARD) #make sure that the car does not get rewarded for colliding
@@ -195,6 +201,22 @@ class RCIRL(Domain):
     def collided(self, state):
         x, y = state[:2]
         return x == self.XMIN or x == self.XMAX or y == self.YMIN or y == self.YMAX
+
+    def bumped(self, state):
+        if self.wallArray is None:
+            return False
+        # assumes the box will be big enough such that it won't be skipped
+        x, y = state[:2]
+        for wallx, wally, dx, dy in self.wallArray:
+            left =  wallx - self.CAR_WIDTH
+            right =  wallx + dx + self.CAR_WIDTH
+            bottom =  wally - self.CAR_WIDTH
+            top =  wally + dy + self.CAR_WIDTH
+
+            if ((left <= x <= right) and
+                (bottom <= y <= top)):
+                return True
+        return False
 
     def simulate_step(self, state, a):
         x, y, speed, heading = state
