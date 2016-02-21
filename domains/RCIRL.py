@@ -168,9 +168,9 @@ class RCIRL(Domain):
         terminal = self.isTerminal() # TODO: Check - get terminal after?
 
         if self.bumped(self.state):
-            pass
+            print "Bumped"
 
-        if self.collided(self.state):
+        if self.collided(self.state) or self.bumped(self.state):
             # r = (self.episodeCap - len(self.prev_states)) * self.STEP_REWARD
             r = -self.episodeCap*(-self.STEP_REWARD) #make sure that the car does not get rewarded for colliding
             terminal = True
@@ -320,17 +320,17 @@ class RCIRL(Domain):
         car_ymin = y - self.CAR_WIDTH / 2.
         if self.domain_fig is None:  # Need to initialize the figure
             self.domain_fig = plt.figure()
-
-            for xmin, ymin, dx, dy in self.wallArray:
-                plt.gca().add_patch(
-                    mpatches.Rectangle(
-                        [xmin,
-                         ymin],
-                        dx,
-                        dy,
-                        color='b',
-                        alpha=.4)
-                )
+            if self.wallArray is not None:
+                for xmin, ymin, dx, dy in self.wallArray:
+                    plt.gca().add_patch(
+                        mpatches.Rectangle(
+                            [xmin,
+                             ymin],
+                            dx,
+                            dy,
+                            color='b',
+                            alpha=.4)
+                    )
 
             # Goal
             for goal in self.goalArray:
