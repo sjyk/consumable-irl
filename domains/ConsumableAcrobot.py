@@ -1,6 +1,6 @@
 """classic Acrobot task"""
 from rlpy.Tools import wrap, bound, lines, fromAtoB, rk4
-from .Domain import Domain
+from rlpy.Domains.Domain import Domain
 import numpy as np
 import matplotlib.pyplot as plt
 
@@ -11,7 +11,11 @@ __license__ = "BSD 3-Clause"
 __author__ = "Christoph Dann <cdann@cdann.de>"
 
 
-class Acrobot(Domain):
+def allMarkovEncoding(ps,k=1):
+    return [0]*k
+
+
+class ConsumableAcrobot(Domain):
 
     """
     Acrobot is a 2-link pendulum with only the second joint actuated
@@ -87,23 +91,67 @@ class Acrobot(Domain):
     action_arrow = None
     domain_fig = None
     actions_num = 3
+    STEP_REWARD = -1.
+    GOAL_REWARD = 1.
+
+    def __init__(self, goalArray,
+                    encodingFunction=allMarkovEncoding,
+                    rewardFunction=None,
+                    goalfn=None,
+                    ):
+        self.goalArray0 = np.array(goalArray)
+        self.goalArray = np.array(goalArray)
+        self.prev_states = []
+
+
+        self.encodingFunction = encodingFunction
+        self.rewardFunction = rewardFunction
+
+        if goalfn:
+            self.goalfn = goalfn
+        else:
+            self.goalfn = self.default_goal_fn
+        # set given goals
+
+        encodingLimits = []
+        for i in range(0,len(self.encodingFunction(self.prev_states))):
+            encodingLimits.append([0,1])
+
+        self.statespace_limits = np.vstack((self.statespace_limits, encodingLimits))
+        self.state_space_dims = len(self.statespace_limits)
+        self.continuous_dims = np.arange(self.state_space_dims)
+
+        self.DimNames = ["Dim: "+str(k) for k in range(0,2+len(self.encodingFunction(self.prev_states)))]
+
+        super(ConsumableAcrobot, self).__init__()
+
+
+    def augment_state(self, state):
+        return np.concatenate((state, 
+                            self.encodingFunction(self.prev_states)))
 
     def s0(self):
-        self.state = np.zeros((4))
-        return np.zeros((4)), self.isTerminal(), self.possibleActions()
+        state = self.augment_state(np.zeros((4)))
+        self.prev_states = []
+        self.goalArray = np.array(self.goalArray0)
+        self.state = np.array(state)
+        return state, self.isTerminal(), self.possibleActions()
+
+    def default_goal_fn(self, state, goal=1):
+        s = state
+        return -np.cos(s[0]) - np.cos(s[1] + s[0]) > goal
 
     def isTerminal(self):
-        s = self.state
-        return -np.cos(s[0]) - np.cos(s[1] + s[0]) > 1.
+        return len(self.goalArray) == 0 or len(self.prev_states) == self.episodeCap
 
     def step(self, a):
-        s = self.state
+        s = self.state[:4]
         torque = self.AVAIL_TORQUE[a]
 
         # Add noise to the force action
         if self.torque_noise_max > 0:
-            torque += self.random_state.uniform(-
-                                                self.torque_noise_max, self.torque_noise_max)
+            torque += self.random_state.uniform(-self.torque_noise_max, 
+                                                self.torque_noise_max)
 
         # Now, augment the state with our force action so it can be passed to
         # _dsdt
@@ -122,9 +170,34 @@ class Acrobot(Domain):
         ns[1] = wrap(ns[1], -np.pi, np.pi)
         ns[2] = bound(ns[2], -self.MAX_VEL_1, self.MAX_VEL_1)
         ns[3] = bound(ns[3], -self.MAX_VEL_2, self.MAX_VEL_2)
+
+        self.prev_states.append(s)  
+        ns = self.augment_state(ns)
         self.state = ns.copy()
+        
         terminal = self.isTerminal()
-        reward = -1. if not terminal else 0.
+
+        if not terminal:
+
+            ########### GOAL FUNCTION: Bound ############
+
+            while not self.isTerminal() and self.goalfn(ns[:4], self.goalArray[0]): 
+                self.goalArray = self.goalArray[1:]
+                print "Goal reached", len(self.prev_states), self.goalArray, self.encodingFunction(self.prev_states)
+                import ipdb; ipdb.set_trace()
+
+            ############################################
+
+        # default reward setup
+        reward = self.STEP_REWARD if not terminal else self.GOAL_REWARD
+
+
+        if not terminal and self.rewardFunction != None:
+            reward = self.rewardFunction(self.prev_states, 
+                                    self.goalArray, 
+                                    self.STEP_REWARD, 
+                                    self.GOAL_REWARD)
+        
         return reward, ns, terminal, self.possibleActions()
 
     def _dsdt(self, s_augmented, t):
@@ -165,8 +238,9 @@ class Acrobot(Domain):
     def showDomain(self, a=0):
         """
         Plot the 2 links + action arrows
+        TODO goal?
         """
-        s = self.state
+        s = self.state[:4]
         if self.domain_fig is None:  # Need to initialize the figure
             self.domain_fig = plt.gcf()
             self.domain_ax = self.domain_fig.add_axes(
@@ -216,84 +290,91 @@ class Acrobot(Domain):
         self.link2.set_data([p1[1], p2[1]], [p1[0], p2[0]])
         plt.draw()
 
+    @staticmethod
+    def allMarkovReward(ps, ga, sr, gr):
+        r = sr
+        last_state = ps[len(ps)-1][0]
+        if (last_state[0],last_state[1]) in ga:
+            r = gr
+        return r
 
-class AcrobotLegacy(Acrobot):
+# class AcrobotLegacy(Acrobot):
 
-    """
-    Acrobot is a 2-link pendulum with only the second joint actuated.
-    Initially, both links point downwards. The goal is to swing the
-    end-effector to a height at least the length of one link above the base.
+#     """
+#     Acrobot is a 2-link pendulum with only the second joint actuated.
+#     Initially, both links point downwards. The goal is to swing the
+#     end-effector to a height at least the length of one link above the base.
 
-    Both links can swing freely and can pass by each other, i.e., they don't
-    collide when they have the same angle.
+#     Both links can swing freely and can pass by each other, i.e., they don't
+#     collide when they have the same angle.
 
-    **STATE:**
-    The state consists of the two rotational joint angles and their velocities
-    [theta1 theta2 thetaDot1 thetaDot2]. An angle of 0 corresponds to
-    the respective link pointing downwards (angles are in world coordinates).
+#     **STATE:**
+#     The state consists of the two rotational joint angles and their velocities
+#     [theta1 theta2 thetaDot1 thetaDot2]. An angle of 0 corresponds to
+#     the respective link pointing downwards (angles are in world coordinates).
 
-    **ACTIONS:**
-    The action is either applying +1, 0 or -1 torque on the joint between
-    the two pendulum links.
+#     **ACTIONS:**
+#     The action is either applying +1, 0 or -1 torque on the joint between
+#     the two pendulum links.
 
-    .. note::
+#     .. note::
 
-        The dynamics equations were missing some terms in the NIPS paper which
-        are present in the book. R. Sutton confirmed in personal correspondance
-        that the experimental results shown in the paper and the book were
-        generated with the equations shown in the book.
+#         The dynamics equations were missing some terms in the NIPS paper which
+#         are present in the book. R. Sutton confirmed in personal correspondance
+#         that the experimental results shown in the paper and the book were
+#         generated with the equations shown in the book.
 
-        However, there is the option to run the domain with the paper equations
-        by setting book_or_nips = 'nips'
+#         However, there is the option to run the domain with the paper equations
+#         by setting book_or_nips = 'nips'
 
-    **REFERENCE:**
+#     **REFERENCE:**
 
-    .. seealso::
-        R. Sutton: Generalization in Reinforcement Learning:
-        Successful Examples Using Sparse Coarse Coding (NIPS 1996)
+#     .. seealso::
+#         R. Sutton: Generalization in Reinforcement Learning:
+#         Successful Examples Using Sparse Coarse Coding (NIPS 1996)
 
-    .. seealso::
-        Sutton, Richard S., and Andrew G. Barto:
-        Reinforcement learning: An introduction.
-        Cambridge: MIT press, 1998.
+#     .. seealso::
+#         Sutton, Richard S., and Andrew G. Barto:
+#         Reinforcement learning: An introduction.
+#         Cambridge: MIT press, 1998.
 
-    """
+#     """
 
-    book_or_nips = "book"
+#     book_or_nips = "book"
 
-    def step(self, a):
+#     def step(self, a):
 
-        torque = self.AVAIL_TORQUE[a]
-        s = self.state
+#         torque = self.AVAIL_TORQUE[a]
+#         s = self.state
 
-        # Add noise to the force action
-        if self.torque_noise_max > 0:
-            torque += self.random_state.uniform(-
-                                                self.torque_noise_max, self.torque_noise_max)
+#         # Add noise to the force action
+#         if self.torque_noise_max > 0:
+#             torque += self.random_state.uniform(-
+#                                                 self.torque_noise_max, self.torque_noise_max)
 
-        s_augmented = np.append(s, torque)
-        for i in range(4):
-            s_dot = np.array(self._dsdt(s_augmented, 0))
-            s_augmented += s_dot * self.dt / 4.
+#         s_augmented = np.append(s, torque)
+#         for i in range(4):
+#             s_dot = np.array(self._dsdt(s_augmented, 0))
+#             s_augmented += s_dot * self.dt / 4.
 
-            # make sure that we don't have 2 free pendulums but a "gymnast"
-            # for k in range(2):
-            #    if np.abs(s_augmented[k]) > np.pi:
-            #        s_augmented[k] = np.sign(s_augmented[k]) * np.pi
-            #        s_augmented[k + 2] = 0.
-            s_augmented[0] = wrap(s_augmented[0], -np.pi, np.pi)
-            s_augmented[1] = wrap(s_augmented[1], -np.pi, np.pi)
-            s_augmented[2] = bound(
-                s_augmented[2],
-                -self.MAX_VEL_1,
-                self.MAX_VEL_1)
-            s_augmented[3] = bound(
-                s_augmented[3],
-                -self.MAX_VEL_2,
-                self.MAX_VEL_2)
+#             # make sure that we don't have 2 free pendulums but a "gymnast"
+#             # for k in range(2):
+#             #    if np.abs(s_augmented[k]) > np.pi:
+#             #        s_augmented[k] = np.sign(s_augmented[k]) * np.pi
+#             #        s_augmented[k + 2] = 0.
+#             s_augmented[0] = wrap(s_augmented[0], -np.pi, np.pi)
+#             s_augmented[1] = wrap(s_augmented[1], -np.pi, np.pi)
+#             s_augmented[2] = bound(
+#                 s_augmented[2],
+#                 -self.MAX_VEL_1,
+#                 self.MAX_VEL_1)
+#             s_augmented[3] = bound(
+#                 s_augmented[3],
+#                 -self.MAX_VEL_2,
+#                 self.MAX_VEL_2)
 
-        ns = s_augmented[:4]  # omit action
-        self.state = ns.copy()
-        terminal = self.isTerminal()
-        reward = -1. if not terminal else 0.
-        return reward, ns, terminal, self.possibleActions()
+#         ns = s_augmented[:4]  # omit action
+#         self.state = ns.copy()
+#         terminal = self.isTerminal()
+#         reward = -1. if not terminal else 0.
+#         return reward, ns, terminal, self.possibleActions()
