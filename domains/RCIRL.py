@@ -5,7 +5,7 @@ consumable rewards
 import os,sys,inspect
 from rlpy.Tools import __rlpy_location__, findElemArray1D, perms
 from rlpy.Domains.Domain import Domain
-from DomainMethods import allMarkovEncoding
+from ConsumableGridWorldIRL import ConsumableGridWorldIRL
 from rlpy.Tools import plt, bound, wrap, mpatches, id2vec
 import matplotlib as mpl
 from copy import deepcopy
@@ -13,6 +13,8 @@ import numpy as np
 import pickle
 from rlpy.Tools import plt, FONTSIZE, linearMap  
 import math
+
+allMarkovEncoding = ConsumableGridWorldIRL.allMarkovEncoding
 
 class RCIRL(Domain): 
     # #default paths
@@ -59,6 +61,7 @@ class RCIRL(Domain):
     HEADING_discretization = 3
     ARROW_LENGTH = .2
     car_fig = None
+    wallArray = None
 
 
     # #an encoding function maps a set of previous states to a fixed
@@ -71,6 +74,7 @@ class RCIRL(Domain):
     # """
     def __init__(self, 
                  goalArray, 
+                 wallArray=None,
                  encodingFunction=allMarkovEncoding, # TODO
                  rewardFunction=None,
                  goalfn=lambda state, goal: state == goal,
@@ -107,8 +111,10 @@ class RCIRL(Domain):
         else:
             self.NOISE = 0
 
-        if step_reward:
-            self.STEP_REWARD = step_reward
+        if wallArray is not None:
+            for elem in wallArray: # (left corner) x, y, dx, dy
+                assert len(elem) == 4
+            self.wallArray = np.array(wallArray)
         if episodeCap:
             self.episodeCap = episodeCap
         if goal_radius:
@@ -161,7 +167,10 @@ class RCIRL(Domain):
 
         terminal = self.isTerminal() # TODO: Check - get terminal after?
 
-        if self.collided(self.state):
+        if self.bumped(self.state):
+            print "Bumped"
+
+        if self.collided(self.state) or self.bumped(self.state):
             # r = (self.episodeCap - len(self.prev_states)) * self.STEP_REWARD
             r = -self.episodeCap*(-self.STEP_REWARD) #make sure that the car does not get rewarded for colliding
             terminal = True
@@ -195,6 +204,22 @@ class RCIRL(Domain):
     def collided(self, state):
         x, y = state[:2]
         return x == self.XMIN or x == self.XMAX or y == self.YMIN or y == self.YMAX
+
+    def bumped(self, state):
+        if self.wallArray is None:
+            return False
+        # assumes the box will be big enough such that it won't be skipped
+        x, y = state[:2]
+        for wallx, wally, dx, dy in self.wallArray:
+            left =  wallx - self.CAR_WIDTH
+            right =  wallx + dx + self.CAR_WIDTH
+            bottom =  wally - self.CAR_WIDTH
+            top =  wally + dy + self.CAR_WIDTH
+
+            if ((left <= x <= right) and
+                (bottom <= y <= top)):
+                return True
+        return False
 
     def simulate_step(self, state, a):
         x, y, speed, heading = state
@@ -295,6 +320,18 @@ class RCIRL(Domain):
         car_ymin = y - self.CAR_WIDTH / 2.
         if self.domain_fig is None:  # Need to initialize the figure
             self.domain_fig = plt.figure()
+            if self.wallArray is not None:
+                for xmin, ymin, dx, dy in self.wallArray:
+                    plt.gca().add_patch(
+                        mpatches.Rectangle(
+                            [xmin,
+                             ymin],
+                            dx,
+                            dy,
+                            color='b',
+                            alpha=.4)
+                    )
+
             # Goal
             for goal in self.goalArray:
                 plt.gca(

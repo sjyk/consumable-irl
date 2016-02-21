@@ -23,7 +23,10 @@ if __name__ == '__main__':
     opt["num_policy_checks"] = 100
     exp = 0.3
     discretization = 20
-    domain = RCIRL([(-0.1, -0.25)],noise=0, rewardFunction=RCIRL.rcreward)
+    walls = [(-1, -0.3, 0.1, 0.3)]
+    domain = RCIRL([(-0.1, -0.25)],
+                      wallArray=walls,
+                      noise=0, rewardFunction=RCIRL.rcreward)
     domain.episodeCap = 200
     # Representation 10
     representation = RBF(domain, num_rbfs=1000,resolution_max=25, resolution_min=25,
@@ -40,7 +43,9 @@ if __name__ == '__main__':
     opt["domain"] = domain 
 
 
-    pdomain = RCIRL([(-0.1, -0.25)],noise=0)
+    pdomain = RCIRL([(-0.1, -0.25)],
+                      wallArray=walls,
+                      noise=0)
 
     experiment = Experiment(**opt)
     experiment.run(visualize_steps=False,
