@@ -1,6 +1,6 @@
 """Pinball domain for reinforcement learning
 """
-from .Domain import Domain
+from rlpy.Domains.Domain import Domain
 import numpy as np
 from itertools import tee, izip
 import itertools
@@ -16,7 +16,7 @@ __author__ = ["Pierre-Luc Bacon",  # author of the original version
               "Austin Hays"]  # adapted for RLPy and TKinter
 
 
-class Pinball(Domain):
+class ConsumablePinball(Domain):
 
     """
     The goal of this domain is to maneuver a small ball on a plate into a hole.
@@ -76,7 +76,7 @@ class Pinball(Domain):
         self.statespace_limits = np.array(
             [[0.0, 1.0], [0.0, 1.0], [-2.0, 2.0], [-2.0, 2.0]])
         self.continuous_dims = [4]
-        super(Pinball, self).__init__()
+        super(ConsumablePinball, self).__init__()
         self.environment = PinballModel(
             self.configuration,
             random_state=self.random_state)
