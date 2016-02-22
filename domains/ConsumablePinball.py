@@ -152,6 +152,10 @@ class ConsumablePinball(Domain):
                                     sr, 
                                     gr)
 
+        ### DEBUGGING ###
+        if len(self.environment.goalArray) == 0:
+            print "0 Goals after action taken - {} step".format(len(self.prev_states))
+
         return reward, state, terminal, self.possibleActions()
 
     def s0(self): #TODO reset this initial state; move logic into PinballModel
@@ -166,7 +170,6 @@ class ConsumablePinball(Domain):
         self.prev_states = []
         self.state = self.augment_state(self.state)
         self.environment.goalArray = np.array(self.goalArray0)
-
         return self.state, self.isTerminal(), self.possibleActions()
 
     def possibleActions(self, s=0):
@@ -530,6 +533,7 @@ class PinballModel:
 
             if self.goalfn(self.ball.position, self.goalArray[0]):
                 self.goalArray = self.goalArray[1:]
+                print "HIT - {0}".format(self.goalArray)
 
             if self.episode_ended():
                 return self.END_EPISODE
