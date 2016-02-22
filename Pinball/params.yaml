@@ -7,8 +7,10 @@ results_path: './Results/Experiments/Pinball/Fourier'
 experiment: rlpy.Experiments.Experiment
 
 domain: domains.ConsumablePinball
-
+# domain: rlpy.Domains.Pinball
 domain_params:
+    goalArray:
+        - [0.9, 0.2]
     noise: 0.1
 
 representation: rlpy.Representations.Fourier

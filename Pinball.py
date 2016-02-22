@@ -30,10 +30,10 @@ def run_experiment_params(param_path='./params.yaml'):
     #             np.linalg.norm(state[:2] - goal[:2]) < RCIRL.GOAL_RADIUS) # cannot vary
 
     # # Load domain
-    # def encode_trial():
-    #     rewards = list(params.domain_params['goalArray'])
-    #     encode = Encoding(rewards[1::3], goalfn)
-    #     return encode.strict_encoding
+    def encode_trial():
+        rewards = list(params.domain_params['goalArray'])
+        encode = Encoding(rewards[1::3], goalfn)
+        return encode.strict_encoding
 
     # params.domain_params['goalfn'] = goalfn
     # params.domain_params['encodingFunction'] = encode_trial()
@@ -82,7 +82,7 @@ if __name__ == '__main__':
     import ipdb; ipdb.set_trace()
     experiment.run(visualize_steps=0,  # should each learning step be shown?
                    visualize_learning=False,
-                   visualize_performance=1)  # show policy / value function?
+                   visualize_performance=False)  # show policy / value function?
                    # saveTrajectories=False)  # show performance runs?
     
     # experiment.domain.showLearning(experiment.agent.representation)
