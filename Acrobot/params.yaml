@@ -1,0 +1,40 @@
+# YAML file for experiments
+# Current setup has _no_ penalization for hitting walls
+exp_id: 1
+
+results_path: './Results/Experiments/Acrobot/Fourier'
+
+experiment: rlpy.Experiments.Experiment
+
+domain: domains.ConsumableAcrobot
+domain_params:
+    goalArray:
+        - [0.7]
+        - [0.75]
+        - [0.8]
+        - [1]
+
+
+representation: rlpy.Representations.Fourier
+representation_params:
+    # domain is implicit as defined above
+    order: 3
+
+policy: rlpy.Policies.eGreedy
+policy_params:
+    # representation: also implicit
+    epsilon: 0.2
+
+agent: rlpy.Agents.Q_Learning
+agent_params:
+    # - representation
+    # - policy
+    # - discount factor = domain.discount_factor = 0.9
+    initial_learn_rate: 0.1
+    lambda_: 0.9
+    learn_rate_decay_mode: 'boyan'
+    boyan_N0: 238
+
+checks_per_policy: 5
+max_steps: 1500
+num_policy_checks: 5
