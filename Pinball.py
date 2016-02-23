@@ -24,21 +24,24 @@ def run_experiment_params(param_path='./params.yaml'):
     params = type("Parameters", (), load_yaml(param_path))
 
 
-    # def goalfn(state, goal):
-    #     return ( abs(state[3] - goal[3]) < RCIRL.HEADBOUND and
-    #             # and (abs(state[2] - goal[2]) < RCIRL.SPEEDBOUND) and 
-    #             np.linalg.norm(state[:2] - goal[:2]) < RCIRL.GOAL_RADIUS) # cannot vary
-
+    def goalfn(state, goal, radius=0.1):
+        # Can be quickly modified to have a new radius per goal element
+        position = state[:2]
+        return (
+            np.linalg.norm(np.array(position)
+                           - np.array(goal)) < radius
+        )
     # # Load domain
-    # def encode_trial():
-    #     rewards = list(params.domain_params['goalArray'])
-    #     encode = Encoding(rewards[1::3], goalfn)
-    #     return encode.strict_encoding
+    def encode_trial():
+        rewards = list(params.domain_params['goalArray'])
+        encode = Encoding(rewards, goalfn)
+        return encode.strict_encoding
 
-    # params.domain_params['goalfn'] = goalfn
-    # params.domain_params['encodingFunction'] = encode_trial()
+    params.domain_params['goalfn'] = goalfn
+    params.domain_params['encodingFunction'] = encode_trial()
     # params.domain_params['goalArray'] = params.domain_params['goalArray'][::4]
     domain = eval(params.domain)(**params.domain_params)
+    # domain = eval(params.domain)()
 
     #Load Representation
     representation = eval(params.representation)(
@@ -82,7 +85,7 @@ if __name__ == '__main__':
     import ipdb; ipdb.set_trace()
     experiment.run(visualize_steps=0,  # should each learning step be shown?
                    visualize_learning=False,
-                   visualize_performance=1)  # show policy / value function?
+                   visualize_performance=False)  # show policy / value function?
                    # saveTrajectories=False)  # show performance runs?
     
     # experiment.domain.showLearning(experiment.agent.representation)

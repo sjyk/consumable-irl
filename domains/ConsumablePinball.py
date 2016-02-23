@@ -15,10 +15,16 @@ __license__ = "BSD 3-Clause"
 __author__ = ["Pierre-Luc Bacon",  # author of the original version
               "Austin Hays"]  # adapted for RLPy and TKinter
 
+def allMarkovEncoding(ps,k=1):
+    return [0]*k
 
 class ConsumablePinball(Domain):
 
     """
+    RL NOTES: Pinball Domain has a ballmodel and environment object. 
+    Statespace augmentation will be only done in the _DOMAIN_.
+
+
     The goal of this domain is to maneuver a small ball on a plate into a hole.
     The plate may contain obstacles which should be avoided.
 
@@ -47,13 +53,13 @@ class ConsumablePinball(Domain):
         __rlpy_location__,
         "Domains",
         "PinballConfigs")
-
-    def __init__(self, noise=.1, episodeCap=1000,
+    # seems to only have one reasonable goalfn
+    def __init__(self, goalArray,
+                 noise=.1, episodeCap=1000,
                  configuration=os.path.join(default_config_dir, "pinball_simple_single.cfg"),
-                 goalArray=None,
                  goalfn=None,
                  rewardFunction=None,
-                 encodingFunction=None):
+                 encodingFunction=allMarkovEncoding):
         """
         configuration:
             location of the configuration file
@@ -75,10 +81,33 @@ class ConsumablePinball(Domain):
             PinballModel.ACC_NONE]
         self.statespace_limits = np.array(
             [[0.0, 1.0], [0.0, 1.0], [-2.0, 2.0], [-2.0, 2.0]])
-        self.continuous_dims = [4]
+        
+
+        self.goalArray0 = np.array(goalArray)
+        self.prev_states = []
+
+        # TODO fix initial state
+
+        # statespace augmentation
+        self.encodingFunction = encodingFunction
+
+        encodingLimits = []
+        for i in range(0,len(self.encodingFunction(self.prev_states))):
+            encodingLimits.append([0,1])
+
+        self.statespace_limits = np.vstack((self.statespace_limits, encodingLimits))
+        self.state_space_dims = len(self.statespace_limits)
+        self.continuous_dims = np.arange(self.state_space_dims)
+
+        self.DimNames = ["Dim: "+str(k) for k in range(0,2+len(self.encodingFunction(self.prev_states)))]
+
+        self.rewardFunction = rewardFunction
+
         super(ConsumablePinball, self).__init__()
         self.environment = PinballModel(
             self.configuration,
+            goalArray,
+            goalfn=goalfn,
             random_state=self.random_state)
 
     def showDomain(self, a):
@@ -98,7 +127,7 @@ class ConsumablePinball(Domain):
         self.screen.update()
 
     def step(self, a):
-        s = self.state
+        s = self.state[:4]
         [self.environment.ball.position[0],
          self.environment.ball.position[1],
          self.environment.ball.xdot,
@@ -109,24 +138,49 @@ class ConsumablePinball(Domain):
         reward = self.environment.take_action(a)
         self.environment._check_bounds()
         state = np.array(self.environment.get_state())
-        self.state = state.copy()
-        return reward, state, self.isTerminal(), self.possibleActions()
 
-    def s0(self):
+        self.prev_states.append(state[:4])
+
+        state = self.augment_state(state)
+        self.state = state
+
+        terminal = self.isTerminal()
+        if not terminal and self.rewardFunction:
+            sr = self.environment.STEP_PENALTY
+            gr = self.environment.END_EPISODE
+            reward = reward + self.rewardFunction(self.prev_states, 
+                                    self.goalArray(), 
+                                    sr, 
+                                    gr)
+
+        return reward, state, terminal, self.possibleActions()
+
+    def s0(self): #TODO reset this initial state; move logic into PinballModel
         self.environment.ball.position[0], self.environment.ball.position[
             1] = self.environment.start_pos
         self.environment.ball.xdot, self.environment.ball.ydot = 0.0, 0.0
         self.state = np.array(
             [self.environment.ball.position[0], self.environment.ball.position[1],
              self.environment.ball.xdot, self.environment.ball.ydot])
+
+
+        self.prev_states = []
+        self.state = self.augment_state(self.state)
+        self.environment.goalArray = np.array(self.goalArray0)
         return self.state, self.isTerminal(), self.possibleActions()
 
     def possibleActions(self, s=0):
         return np.array(self.actions)
 
     def isTerminal(self):
-        return self.environment.episode_ended()
+        return self.environment.episode_ended() or len(self.prev_states) == self.episodeCap
 
+    def augment_state(self, state):
+        return np.concatenate((state, 
+                            self.encodingFunction(self.prev_states)))
+
+    def goalArray(self):
+        return self.environment.goalArray
 
 class BallModel:
 
@@ -375,8 +429,13 @@ class PinballModel:
     STEP_PENALTY = -1
     THRUST_PENALTY = -5
     END_EPISODE = 10000
+    SEGMENT_REWARD = 5
+    goalArray = []
 
-    def __init__(self, configuration, random_state=np.random.RandomState()):
+    def __init__(self, configuration, 
+                    goalArray,
+                    goalfn=None,
+                    random_state=np.random.RandomState()):
         """ Read a configuration file for Pinball and draw the domain to screen
 
     :param configuration: a configuration file containing the polygons,
@@ -404,16 +463,23 @@ class PinballModel:
                 elif tokens[0] == 'polygon':
                     self.obstacles.append(
                         PinballObstacle(zip(*[iter(map(float, tokens[1:]))] * 2)))
-                elif tokens[0] == 'target':
-                    self.target_pos = [float(tokens[1]), float(tokens[2])]
-                    self.target_rad = float(tokens[3])
+                # elif tokens[0] == 'target': # Will ignore
+                #     self.target_pos = [float(tokens[1]), float(tokens[2])]
+                #     self.target_rad = float(tokens[3])
                 elif tokens[0] == 'start':
                     start_pos = zip(*[iter(map(float, tokens[1:]))] * 2)
                 elif tokens[0] == 'ball':
                     ball_rad = float(tokens[1])
         self.start_pos = start_pos[0]
+
+        self.goalfn = goalfn if goalfn else self.default_goalfn
+
+        self.goalArray = np.array(goalArray)
         a = self.random_state.randint(len(start_pos))
         self.ball = BallModel(list(start_pos[a]), ball_rad)
+
+        ## TEMPORARILY FOR VISUALIZATION ##
+        self.target_pos = self.goalArray[0][:2]
 
     def get_state(self):
         """ Access the current 4-dimensional state vector
@@ -436,6 +502,7 @@ class PinballModel:
         :type action: int
 
         """
+        reward = 0
         for i in xrange(20):
             if i == 0:
                 self.ball.add_impulse(*self.action_effects[action])
@@ -460,16 +527,28 @@ class PinballModel:
                 self.ball.xdot = -self.ball.xdot
                 self.ball.ydot = -self.ball.ydot
 
+            if self.goalfn(self.ball.position, self.goalArray[0]):
+                self.goalArray = self.goalArray[1:]
+                print "HIT - {0}".format(self.goalArray)
+                reward += self.SEGMENT_REWARD
+
             if self.episode_ended():
-                return self.END_EPISODE
+                return reward + self.END_EPISODE
 
         self.ball.add_drag()
         self._check_bounds()
 
         if action == self.ACC_NONE:
-            return self.STEP_PENALTY
+            return reward + self.STEP_PENALTY
 
-        return self.THRUST_PENALTY
+        return reward + self.THRUST_PENALTY
+    
+    def default_goalfn(self, position, goal, radius=0.4):
+        print "using default"
+        return (
+            np.linalg.norm(np.array(position)
+                           - np.array(goal)) < radius
+        )
 
     def episode_ended(self):
         """ Find out if the ball reached the target
@@ -478,10 +557,7 @@ class PinballModel:
         :rtype: bool
 
         """
-        return (
-            np.linalg.norm(np.array(self.ball.position)
-                           - np.array(self.target_pos)) < self.target_rad
-        )
+        return len(self.goalArray) == 0
 
     def _check_bounds(self):
         """ Make sure that the ball stays within the environment """
