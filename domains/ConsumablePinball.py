@@ -107,6 +107,7 @@ class ConsumablePinball(Domain):
         self.environment = PinballModel(
             self.configuration,
             goalArray,
+            goalfn=goalfn,
             random_state=self.random_state)
 
     def showDomain(self, a):
@@ -126,11 +127,11 @@ class ConsumablePinball(Domain):
         self.screen.update()
 
     def step(self, a):
-        s = self.state
+        s = self.state[:4]
         [self.environment.ball.position[0],
          self.environment.ball.position[1],
          self.environment.ball.xdot,
-         self.environment.ball.ydot] = s[:4]
+         self.environment.ball.ydot] = s
         if self.random_state.random_sample() < self.NOISE:
             # Random Move
             a = self.random_state.choice(self.possibleActions())
@@ -151,10 +152,6 @@ class ConsumablePinball(Domain):
                                     self.goalArray(), 
                                     sr, 
                                     gr)
-
-        ### DEBUGGING ###
-        if len(self.environment.goalArray) == 0:
-            print "0 Goals after action taken - {} step".format(len(self.prev_states))
 
         return reward, state, terminal, self.possibleActions()
 
@@ -432,6 +429,7 @@ class PinballModel:
     STEP_PENALTY = -1
     THRUST_PENALTY = -5
     END_EPISODE = 10000
+    SEGMENT_REWARD = 5
     goalArray = []
 
     def __init__(self, configuration, 
@@ -474,10 +472,7 @@ class PinballModel:
                     ball_rad = float(tokens[1])
         self.start_pos = start_pos[0]
 
-        if goalfn:
-            self.goalfn = goalfn
-        else:
-            self.goalfn = self.default_goalfn
+        self.goalfn = goalfn if goalfn else self.default_goalfn
 
         self.goalArray = np.array(goalArray)
         a = self.random_state.randint(len(start_pos))
@@ -507,6 +502,7 @@ class PinballModel:
         :type action: int
 
         """
+        reward = 0
         for i in xrange(20):
             if i == 0:
                 self.ball.add_impulse(*self.action_effects[action])
@@ -534,19 +530,21 @@ class PinballModel:
             if self.goalfn(self.ball.position, self.goalArray[0]):
                 self.goalArray = self.goalArray[1:]
                 print "HIT - {0}".format(self.goalArray)
+                reward += self.SEGMENT_REWARD
 
             if self.episode_ended():
-                return self.END_EPISODE
+                return reward + self.END_EPISODE
 
         self.ball.add_drag()
         self._check_bounds()
 
         if action == self.ACC_NONE:
-            return self.STEP_PENALTY
+            return reward + self.STEP_PENALTY
 
-        return self.THRUST_PENALTY
+        return reward + self.THRUST_PENALTY
     
     def default_goalfn(self, position, goal, radius=0.4):
+        print "using default"
         return (
             np.linalg.norm(np.array(position)
                            - np.array(goal)) < radius
