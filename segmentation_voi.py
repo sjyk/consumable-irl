@@ -64,6 +64,8 @@ def get_demonstrations(demonstration_per_policy,max_policy_iter,num_policy_demo_
 	return map(lambda x:map(lambda y:np.array(y),x),experiment.all_experiment_list)
 	# return map(lambda x:map(lambda y:np.array(map(eval,y)),x),experiment.result['all_steps'])
 
+
+
 def get_tsc_labels(demos):
 	transitions=TransitionStateClustering(window_size=3)
 	actual_demos=[]
@@ -293,7 +295,47 @@ def get_errors(features,labels,model):
 		rtn.append(t.T.dot(t))
 	return np.array(rtn)
 
+def rewards(actions,states,domain):
 
+	eps_length = 0
+    eps_return = 0
+    eps_discount_return = 0
+    eps_term = 0
+
+
+    for a in actions:
+
+        r, ns, eps_term, p_actions = domain.step(a)
+        s = ns
+        eps_return += r
+        eps_discount_return += domain.discount_factor ** eps_length * \
+            r
+        eps_length += 1
+        if eps_term:
+        	break
+    return eps_discount_return
+
+def get_actions(features,labels,model):
+	feat=np.concatenate(features)
+	lab=np.concatenate(labels)
+	model.fit(feat,lab)
+	values=model.predict(feat)
+	actionlist=[]
+	for demo in features:
+		len_=len(demo)
+		actionlist.append(values[:len_])
+		values=values[len_:]
+	return actionlist
+
+def get_all_rewards(actionlist):
+	rewardlist=[]
+	walls = [(-1, -0.3, 0.1, 0.3)]
+	for actions in actionlist:
+		domain = RCIRL([(-0.1, -0.25)],
+					  wallArray=walls,
+					  noise=0)
+		rewardlist.append(rewards(actions,None,domain))
+	return rewardlist
 
 def get_corpora_tree(tree_):
 	corpora={}
@@ -348,7 +390,7 @@ def VOI(errors1,errors2):
 	# 	tot2+=sum(errorlist2)/float(len(errorlist2))
 	tot1=np.sum(errors1)/float(len(errors1))
 	tot2=np.sum(errors2)/float(len(errors2))
-	return (tot2-tot1)/float(len(errors1))
+	return -(tot2-tot1)
 
 
 
@@ -362,18 +404,26 @@ actual,demo_w_tsh=TSH_labeling(demos)
 labels=label(actual)
 model=linear_model.LinearRegression()
 # actual=np.array(actual)
-err1=get_errors(actual,labels,model)
+# err1=get_errors(actual,labels,model)
+act1=get_actions(actual,labels,model)
+rew1=get_all_rewards(act1)
 voi1=[]
 for d in demo_w_tsh:
-	err2=get_errors(d,labels,model)
-	voi1.append(VOI(err1,err2))
+	# err2=get_errors(d,labels,model)
+	act2=get_actions(d,labels,model)
+	rew2=get_all_rewards(act2)
+	# voi1.append(VOI(err1,err2))
+	voi1.append(VOI(rew1,rew2))
 
 actual,demo_w_tsc=TSC_labeling(demos)
 labels=label(actual)
 model=linear_model.LinearRegression()
 # err1=get_errors(actual,labels,model)
-err2=get_errors(demo_w_tsc,labels,model)
-voi2=VOI(err1,err2)
+# err2=get_errors(demo_w_tsc,labels,model)
+act2=get_actions(demo_w_tsc,labels,model)
+rew2=get_all_rewards(act2)
+# voi2=VOI(err1,err2)
+voi2=VOI(rew1,rew2)
 print len(demo_w_tsh)
 print voi1
 print voi2
