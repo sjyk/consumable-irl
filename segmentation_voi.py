@@ -16,7 +16,9 @@ import os,sys,inspect
 import random
 from sklearn import linear_model
 import pickle as pkl
-import IPython
+# import IPython
+import matplotlib.pyplot as plt
+
 
 REVERSE_LEVELS=False
 
@@ -266,6 +268,7 @@ def TSC_labeling(demos):
 	return actual,featurize(actual,rtn,corpora)
 
 
+
 def label(demos):
 	rtn=[]
 	for demo in demos:
@@ -298,22 +301,22 @@ def get_errors(features,labels,model):
 def rewards(actions,states,domain):
 
 	eps_length = 0
-    eps_return = 0
-    eps_discount_return = 0
-    eps_term = 0
+	eps_return = 0
+	eps_discount_return = 0
+	eps_term = 0
 
+	domain.s0()
+	for a in actions:
 
-    for a in actions:
-
-        r, ns, eps_term, p_actions = domain.step(a)
-        s = ns
-        eps_return += r
-        eps_discount_return += domain.discount_factor ** eps_length * \
-            r
-        eps_length += 1
-        if eps_term:
-        	break
-    return eps_discount_return
+		r, ns, eps_term, p_actions = domain.step_dx(a)
+		s = ns
+		eps_return += r
+		eps_discount_return += domain.discount_factor ** eps_length * \
+			r
+		eps_length += 1
+		if eps_term:
+			break
+	return eps_discount_return
 
 def get_actions(features,labels,model):
 	feat=np.concatenate(features)
@@ -330,10 +333,10 @@ def get_actions(features,labels,model):
 def get_all_rewards(actionlist):
 	rewardlist=[]
 	walls = [(-1, -0.3, 0.1, 0.3)]
-	for actions in actionlist:
-		domain = RCIRL([(-0.1, -0.25)],
+	domain = RCIRL([(-0.1, -0.25)],
 					  wallArray=walls,
 					  noise=0)
+	for actions in actionlist:
 		rewardlist.append(rewards(actions,None,domain))
 	return rewardlist
 
@@ -424,6 +427,8 @@ act2=get_actions(demo_w_tsc,labels,model)
 rew2=get_all_rewards(act2)
 # voi2=VOI(err1,err2)
 voi2=VOI(rew1,rew2)
-print len(demo_w_tsh)
 print voi1
 print voi2
+plt.plot(voi1)
+plt.axhline(voi2)
+plt.show()
