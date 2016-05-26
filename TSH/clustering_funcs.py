@@ -7,6 +7,9 @@ import IPython
 from itertools import combinations
 import numpy as np
 import sklearn.cluster
+import pickle as pkl
+import os
+import matplotlib.pyplot as plt
 
 def cluster_spectral_k_means(groups,threshold=lambda x:x<=0,num_groups=lambda x:int(math.ceil(len(x)/4.0)),num_dims=2,opt_cutoff=.5):
 	word_dict={}
@@ -44,12 +47,13 @@ def cluster_spectral_k_means(groups,threshold=lambda x:x<=0,num_groups=lambda x:
 	# print clusters
 	return clusters
 
-def cluster_segmentation_data_k_means(groups,threshold=lambda x:x<=0,num_groups=lambda x:int(math.ceil(len(x)/4.0)),num_dims=2,opt_cutoff=.5):
+def cluster_segmentation_data_k_means(groups,threshold=lambda x:x<=0,num_groups=lambda x:int(math.ceil(len(x)/10.0)) if len(x)<100 else 50,num_dims=2,opt_cutoff=.5):
+    """returns clusters according to spectral clustering"""
+    #arbitrary num_groups function I've been using to debug spectral clustering
+    num_groups=lambda x:int(math.ceil(len(x)/4.0)) if len(x)<100 else 25
     similarity_mat=get_ed_mat(groups)
     cluster_o_matic=sklearn.cluster.SpectralClustering(n_clusters=num_groups(groups),affinity='precomputed')
-    # cluster_o_matic=sklearn.cluster.AffinityPropagation(affinity='precomputed')
-    labs=cluster_o_matic.fit_predict(similarity_mat)
-    # labs=cluster_o_matic.predict(similarity_mat)
+    labs=cluster_o_matic.fit_predict(np.max(similarity_mat)-similarity_mat)
     rtn_dict={}
     for i,lab in enumerate(labs):
         if lab not in rtn_dict:
@@ -57,10 +61,13 @@ def cluster_segmentation_data_k_means(groups,threshold=lambda x:x<=0,num_groups=
         rtn_dict[lab].append(groups[i])
     return [x for x in rtn_dict.values()]
 
-def cluster_segmentation_data_affinity(groups,threshold=lambda x:x<=0,num_groups=lambda x:int(math.ceil(len(x)/4.0)),num_dims=2,opt_cutoff=.5):
-    similarity_mat=get_lcs_mat(groups)
-    cluster_o_matic=sklearn.cluster.AffinityPropagation(affinity='precomputed')
+def cluster_segmentation_data_affinity(groups,threshold=lambda x:x<=0,num_groups=lambda x:int(math.ceil(len(x)/4.0)) if len(x)<100 else 50,num_dims=2,opt_cutoff=.5):
+    """returns clusters according to affinity propagation"""
+    similarity_mat=get_ed_mat(groups)
+
+    cluster_o_matic=sklearn.cluster.AffinityPropagation(affinity='precomputed',convergence_iter=5,max_iter=2000)
     labs=cluster_o_matic.fit_predict(similarity_mat)
+    # labs=cluster_o_matic.fit_predict(np.max(similarity_mat)-similarity_mat)
     rtn_dict={}
     for i,lab in enumerate(labs):
         if lab not in rtn_dict:
@@ -104,7 +111,10 @@ def get_ed_mat(groups):
     ed_mat=np.zeros((len_,len_))
     for i in range(len_):
         for j in range(len_):
-            ed_mat[i,j]=edit_distance(groups[i],groups[j])
+            if i!=j:
+                ed_mat[i,j]=np.exp(-edit_distance(groups[i],groups[j]))
+            else:
+                ed_mat[i,j]=1.0
     return ed_mat
 
 def get_col_sim(groups,sim_metric,point_thresh,match):
@@ -119,6 +129,7 @@ def get_col_sim(groups,sim_metric,point_thresh,match):
             else:
                 ed_mat[i,j]=sim_metric(groups[i],groups[j],match=lambda x,y:match(x,y,thresh=point_thresh))
     print 'making col sim'
+    ed_mat*=-1
     col_sim=np.zeros((len_,len_))
     for i in range(len_):
         i_row=ed_mat[i]

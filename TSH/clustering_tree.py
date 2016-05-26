@@ -3,9 +3,11 @@ import math
 from R_to_V import *
 import numpy as np
 from itertools import product
-from clustering_funcs import get_lowest_ed_pair
+from clustering_funcs import get_lowest_ed_pair,cluster_segmentation_data_affinity
+import pickle as pkl
 
 def getnextchars(curr_char):
+	"""used to assign names to each node"""
 	last_char_val=curr_char[-1]
 	if last_char_val=='Z':
 		i=len(curr_char)-1
@@ -31,19 +33,13 @@ def getnextchars(curr_char):
 		return curr_char[:-1]+chr(ord(last_char_val)+1)	
 
 def get_tree(data,clustering_func,intersect_meth=lambda x,y:intersection(x,y),threshold=lambda x:x<=0,cutoff=lambda x:len(x)<=1,num_groups=lambda groups:int(math.ceil(len(groups)/4.0)),join=False,names=None):
+	"""returns the hierarchical clustering tree"""
 	curr_trees=[]
 	return_dict={}
 	level_dict={}
 	curr_char=chr(ord('A')-1)
 	for i,datum in enumerate(data):
-		# curr_char_val=ord(curr_char[-1])
-		# if curr_char_val==122:
-		# 	curr_char+='A'
-		# else:
-		# 	curr_char_val+=1
-		# 	curr_char=curr_char[:-1]+chr(curr_char_val)
-		# curr_char=getnextchars(curr_char)
-		# return_dict[curr_char]=datum
+		
 		if names:
 			temp=names[i]
 			# print temp
@@ -61,15 +57,19 @@ def get_tree(data,clustering_func,intersect_meth=lambda x,y:intersection(x,y),th
 	while True :#set stop depth with function
 		print 'cluster_lvl: '+str(level)
 		clustered=perform_clustering(curr_trees,clustering_func,threshold,num_groups)
+		print 'done clustering, starting merging'
 		curr_trees=[]
 		#print clustered[0]
 		removed_words=[]
 		level_dict[level]={}
 		no_root=True
+		i=0
+		clusterlen_list=[]
 		for group in clustered:
-			# print len(group)
+			print 'cluster id:',len(group),'size:'i
+			i+=1
+			clusterlen_list.append((len(group),i))
 			if len(group)==1:
-				# curr_trees.append(group[0])
 				curr_char=getnextchars(curr_char)
 				curr_trees.append(Tree(group[0].item,subtree=group,node_name=getnextchars(curr_char)))
 				continue
@@ -77,21 +77,12 @@ def get_tree(data,clustering_func,intersect_meth=lambda x,y:intersection(x,y),th
 			subtrees=[]
 			for doc in group:			
 				subtrees.append(doc)
-			# print group
 			intersect=intersect_meth(group,len(clustered))
-			# print intersect
 			if intersect==None:
 				continue
 			lost=intersect[1]
 			intersect=intersect[0]
-			# print intersect
 			curr_char=getnextchars(curr_char)
-			# curr_char_val=ord(curr_char[-1])
-			# if curr_char_val==122:
-			# 	curr_char+='A'
-			# else:
-			# 	curr_char_val+=1
-			# 	curr_char=curr_char[:-1]+chr(curr_char_val)
 			level_dict[level][curr_char]=lost
 			return_dict[curr_char]=intersect
 			if join:
@@ -114,13 +105,13 @@ def get_tree(data,clustering_func,intersect_meth=lambda x,y:intersection(x,y),th
 			else:
 				curr_trees=[(Tree(intersect,subtree=curr_trees,node_name='0_unrooted',lost_vals=lost))]
 			break
+		# pkl.dump(clusterlen_list,open('cbst2_'+str(level)+'.pkl','wb'))
 		level+=1
 	return curr_trees[0],return_dict,level_dict
 
 
 def perform_clustering(groups,clustering_func,threshold=lambda x:x<=0,num_groups=lambda groups:int(math.ceil(len(groups)/4.0))):
 	return clustering_func(groups,threshold,num_groups=num_groups)
-	# return cluster_segmentation_data_k_means(groups)
 
 
 def intersection(group,cluster_size):
