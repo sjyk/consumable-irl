@@ -197,6 +197,59 @@ class RCIRL(Domain):
 
         return r, ns, terminal, self.possibleActions()
 
+    def step_dx(self, dx):
+        r = self.STEP_REWARD
+        ga = self.goalArray.copy()
+
+        if self.random_state.random_sample() < self.NOISE:
+            # Random Move
+            a = self.random_state.choice(self.possibleActions())
+
+    #     # Take action
+    #     statesize = np.shape(self.state)
+    #     actionsize = np.shape(self.ACTIONS[a])
+    #    # print statesize[0]-actionsize[0]
+
+        ns = self.augment_state(self.state[:4]+dx)
+        # print ns
+        # if any(ns):
+            # import ipdb; ipdb.set_trace()
+
+        self.prev_states.append(ns[:4])
+    #     #print ns[0], ns[1],ga[0][0],ga[0][1]
+
+        terminal = self.isTerminal() # TODO: Check - get terminal after?
+
+        if self.bumped(self.state):
+            print "Bumped"
+
+        if self.collided(self.state) or self.bumped(self.state):
+            # r = (self.episodeCap - len(self.prev_states)) * self.STEP_REWARD
+            r = -self.episodeCap*(-self.STEP_REWARD) #make sure that the car does not get rewarded for colliding
+            terminal = True
+
+        if not terminal and self.at_goal(ns,self.state,ga[0]): 
+            r = self.GOAL_REWARD #(len(self.goalArray0) - len(self.goalArray)) ** 1.3
+            self.goalArray = ga[1:]
+            if self.debug:
+                print "New Goal Reached!", ns, r, len(self.prev_states)
+
+        if self.rewardFunction != None:
+            r = self.rewardFunction(self.prev_states, 
+                                    self.goalArray, 
+                                    self.STEP_REWARD, 
+                                    self.GOAL_REWARD,
+                                    self.collided(self.state))
+        
+        ## DEBUG
+        if len(self.prev_states) == 11:
+            self.terminal_state.append(self.state)   
+        ######### 
+
+        self.state = ns.copy()
+
+        return r, ns, terminal, self.possibleActions()
+
     def augment_state(self, state):
         return np.concatenate((state, 
                             self.encodingFunction(self.prev_states)))

@@ -110,11 +110,16 @@ class ConsumableExperiment(Experiment):
         self.start_time = clock()
         self.elapsed_time = 0
         # do a first evaluation to get the quality of the inital policy
+        self.all_experiment_list=[]
         self.evaluate(total_steps, episode_number, visualize_performance)
         self.total_eval_time = 0.
         terminal = True
+        curr_experiment_list=[]
         while total_steps < self.max_steps:
             if terminal or eps_steps >= self.domain.episodeCap:
+                # if curr_experiment_list!=[]:
+                #     self.all_experiment_list.append(curr_experiment_list)
+                curr_experiment_list=[]
                 s, terminal, p_actions = self.domain.s0()
                 a = self.agent.policy.pi(s, terminal, p_actions)
                 # Visual
@@ -127,6 +132,7 @@ class ConsumableExperiment(Experiment):
                 eps_steps = 0
                 episode_number += 1
             # Act,Step
+            curr_experiment_list.append((str(list(s)),str(a)))
             r, ns, terminal, np_actions = self.domain.step(a)
 
             self._gather_transition_statistics(s, a, ns, r, learning=True)
@@ -203,13 +209,17 @@ class ConsumableExperiment(Experiment):
         performance_steps = 0.
         performance_term = 0.
         performance_discounted_return = 0.
+        runs=[]
         for j in xrange(self.checks_per_policy):
-            p_ret, p_step, p_term, p_dret = self.performanceRun(
+            p_ret, p_step, p_term, p_dret,run = self.performanceRun(
                 total_steps, visualize=visualize > j)
             performance_return += p_ret
             performance_steps += p_step
             performance_term += p_term
             performance_discounted_return += p_dret
+            runs.append(run)
+        if runs!=[]:
+            self.all_experiment_list.append(runs)
         performance_return /= self.checks_per_policy
         performance_steps /= self.checks_per_policy
         performance_term /= self.checks_per_policy
@@ -241,10 +251,56 @@ class ConsumableExperiment(Experiment):
         np.random.set_state(random_state)
         #self.domain.rand_state = random_state_domain
 
+    def performanceRun(self, total_steps, visualize=False):
+        """
+        Execute a single episode using the current policy to evaluate its
+        performance. No exploration or learning is enabled.
+
+        :param total_steps: int
+            maximum number of steps of the episode to peform
+        :param visualize: boolean, optional
+            defines whether to show each step or not (if implemented by the domain)
+        """
+
+        # Set Exploration to zero and sample one episode from the domain
+        eps_length = 0
+        eps_return = 0
+        eps_discount_return = 0
+        eps_term = 0
+
+        self.agent.policy.turnOffExploration()
+
+        s, eps_term, p_actions = self.performance_domain.s0()
+        experiment_list=[]
+        while not eps_term and eps_length < self.domain.episodeCap:
+            a = self.agent.policy.pi(s, eps_term, p_actions)
+            if visualize:
+                self.performance_domain.showDomain(a)
+            experiment_list.append(list(s))
+            # experiment_list.append(str(list(s)+[a]))
+
+            r, ns, eps_term, p_actions = self.performance_domain.step(a)
+            self._gather_transition_statistics(s, a, ns, r, learning=False)
+            s = ns
+            eps_return += r
+            eps_discount_return += self.performance_domain.discount_factor ** eps_length * \
+                r
+            eps_length += 1
+        if visualize:
+            self.performance_domain.showDomain(a)
+        self.agent.policy.turnOnExploration()
+        # This hidden state is for domains (such as the noise in the helicopter domain) that include unobservable elements that are evolving over time
+        # Ideally the domain should be formulated as a POMDP but we are trying
+        # to accomodate them as an MDP
+
+        return eps_return, eps_length, eps_term, eps_discount_return, experiment_list
+
     def save(self):
         """Saves the experimental results to the ``results.json`` file
         """
         results_fn = os.path.join(self.full_path, self.output_filename)
+        # self.result["all_steps"]=self.all_experiment_list
+        self.result["walls"]=self.domain.wallArray.tolist()
         if not os.path.exists(self.full_path):
             os.makedirs(self.full_path)
         with open(results_fn, "w") as f:
